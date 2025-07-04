@@ -1,4 +1,14 @@
 import User from '../models/User.js';
+import jwt from 'jsonwebtoken';
+
+/**
+ * Generate JWT Token
+ */
+const generateToken = (user) => {
+  return jwt.sign({ userId: user._id, email: user.email }, process.env.JWT_SECRET, {
+    expiresIn: '2h',
+  });
+};
 
 /**
  * Register a new user
@@ -21,7 +31,9 @@ export const registerUser = async (req, res) => {
     const user = new User({ name, email });
     await user.save();
 
-    res.status(201).json({ message: 'User registered successfully', user });
+    const token = generateToken(user);
+
+    res.status(201).json({ message: 'User registered successfully', user, token });
   } catch (error) {
     console.error('Error registering user:', error);
     res.status(500).json({ error: 'Server error' });
@@ -46,7 +58,9 @@ export const loginUser = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.status(200).json({ message: 'Login successful', user });
+    const token = generateToken(user);
+
+    res.status(200).json({ message: 'Login successful', user, token });
   } catch (error) {
     console.error('Error logging in user:', error);
     res.status(500).json({ error: 'Server error' });

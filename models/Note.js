@@ -24,4 +24,7 @@ const noteSchema = new mongoose.Schema(
   { timestamps: true } // adds createdAt and updatedAt
 );
 
+noteSchema.index({ user: 1, pdf: 1 }, { unique: true });
+
+
 export default mongoose.model('Note', noteSchema);

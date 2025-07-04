@@ -4,33 +4,41 @@ import PDF from '../models/PDF.js';
 import Note from '../models/Note.js';
 import Conversation from '../models/Conversation.js';
 import { extractTextFromPDF } from '../utils/pdfUtils.js';
-import { extractImagesFromPDF } from '../utils/imageExtractor.js';
 import { analyzeImagesLocally } from '../model/imageAnalysis.js';
+import { exec } from 'child_process';
+import redis from '../utils/redisClient.js';
+
+
+
+const convertPDFToImages = async (pdfPath) => {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.join('utils', 'convertToImages.py');
+    exec(`python "${scriptPath}" "${pdfPath}"`, (err, stdout, stderr) => {
+      if (err) return reject(stderr || err.message);
+      try {
+        const images = JSON.parse(stdout); // expect list of { page, imageUrl }
+        resolve(images);
+      } catch (e) {
+        reject(`Failed to parse images: ${stdout}`);
+      }
+    });
+  });
+};
 
 export const uploadPDF = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const userId = req.user._id; // ✅ Extracted from JWT middleware
     const file = req.file;
 
-    if (!userId || !file) {
-      return res.status(400).json({ error: 'userId and PDF file are required' });
-    }
-
-    if (file.mimetype !== 'application/pdf') {
-      return res.status(400).json({ error: 'Uploaded file must be a PDF' });
-    }
+    if (!file) return res.status(400).json({ error: 'PDF file is required' });
 
     const filePath = file.path;
     const stats = await fs.stat(filePath);
-
-    console.log(filePath);
     const extractedText = await extractTextFromPDF(filePath);
-    const imagesWithOCR = await extractImagesFromPDF(filePath); // includes ocrText
-    console.log('🖼️ Extracted images with OCR:', imagesWithOCR.length);
 
-    const imagesWithAnalysis = await analyzeImagesLocally(imagesWithOCR);
+    const imageList = await convertPDFToImages(filePath);
+    const imagesWithDescriptions = await analyzeImagesLocally(imageList);
 
-    console.log('📄 PDF uploaded:', file.originalname);
     const newPDF = new PDF({
       user: userId,
       filename: file.filename,
@@ -38,29 +46,23 @@ export const uploadPDF = async (req, res) => {
       fileSize: stats.size,
       fileType: file.mimetype,
       extractedText,
-      images: imagesWithAnalysis,
-      imageCount: imagesWithAnalysis.length,
+      images: imagesWithDescriptions,
+      imageCount: imagesWithDescriptions.length,
     });
 
     await newPDF.save();
-
-    res.status(201).json({ message: 'PDF uploaded and processed with OCR + image analysis', pdf: newPDF });
-  } catch (error) {
-    console.error('❌ Error uploading PDF:', error);
+    res.status(201).json({ message: 'PDF uploaded, images analyzed, and saved.', pdf: newPDF });
+  } catch (err) {
+    console.error('❌ Upload Error:', err);
     res.status(500).json({ error: 'Failed to process PDF' });
   }
 };
 
 
 
-// Get all PDFs for a user
 export const getUserPDFs = async (req, res) => {
   try {
-    const { userId } = req.params;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
+    const userId = req.user._id; // ✅ from JWT
 
     const pdfs = await PDF.find({ user: userId }).sort({ createdAt: -1 });
     res.status(200).json(pdfs);
@@ -70,14 +72,14 @@ export const getUserPDFs = async (req, res) => {
   }
 };
 
-// Get detailed info for a specific PDF
+
 export const getPdfDetails = async (req, res) => {
   try {
-    const userId = req.body.userId;
+    const userId = req.user._id; // ✅ from JWT
     const pdfId = req.params.pdfId;
 
-    if (!userId || !pdfId) {
-      return res.status(400).json({ error: 'userId and pdfId are required' });
+    if (!pdfId) {
+      return res.status(400).json({ error: 'pdfId is required' });
     }
 
     const pdf = await PDF.findOne({ _id: pdfId, user: userId });
@@ -100,13 +102,14 @@ export const getPdfDetails = async (req, res) => {
   }
 };
 
-// Delete a PDF and related files
+
 export const deletePDF = async (req, res) => {
   try {
+    const userId = req.user._id; // ✅ from JWT
     const { pdfId } = req.params;
 
-    const pdf = await PDF.findById(pdfId);
-    if (!pdf) return res.status(404).json({ error: 'PDF not found' });
+    const pdf = await PDF.findOne({ _id: pdfId, user: userId });
+    if (!pdf) return res.status(404).json({ error: 'PDF not found or access denied' });
 
     const mainPath = path.join('uploads', pdf.filename);
     await fs.unlink(mainPath).catch(() => {});
@@ -117,6 +120,18 @@ export const deletePDF = async (req, res) => {
     }
 
     await PDF.findByIdAndDelete(pdfId);
+
+    // ✅ Redis Cache Invalidation
+    try {
+      const pattern = `answer:${pdf._id}:*`;
+      const keys = await redis.keys(pattern);
+      if (keys.length > 0) {
+        await redis.del(...keys);
+        console.log(`🧹 Cleared ${keys.length} cached entries for PDF ${pdf._id}`);
+      }
+    } catch (err) {
+      console.warn('⚠️ Failed to clear Redis cache:', err.message);
+    }
 
     res.status(200).json({ message: 'PDF deleted successfully' });
   } catch (error) {

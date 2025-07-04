@@ -1,4 +1,7 @@
-const GEMINI_API_KEY = "Your APi Key Here"; // Replace with your actual Gemini API key
+import env from 'dotenv';
+env.config();
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // Replace with your actual Gemini API key
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 const getCompletion = async (promptText) => {

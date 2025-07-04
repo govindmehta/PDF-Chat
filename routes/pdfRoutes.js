@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadPDF, getPdfDetails, getUserPDFs } from '../controllers/pdfController.js';
+import { uploadPDF, getPdfDetails, getUserPDFs, deletePDF } from '../controllers/pdfController.js';
 
 const router = express.Router();
 
@@ -17,6 +17,7 @@ const upload = multer({ dest: 'uploads/' });
 router.post('/upload', upload.single('pdf'), uploadPDF);
 router.get("/getpdfs", getUserPDFs);
 router.get('/pdfs/:pdfId/details', getPdfDetails);
+router.delete('/pdfs/:pdfId', deletePDF);
 
 
 export default router;

@@ -6,9 +6,11 @@ import aiRoutes from './routes/aiRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import env from 'dotenv';
+import noteRoutes from './routes/noteRoutes.js';
+import { authenticateUser } from './middlewares/authMiddleware.js';
 
-
-dotenv.config();
+env.config();
 
 import connectDB from './config/db.js';
 
@@ -23,9 +25,10 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
-app.use('/api/pdf', pdfRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/user', userRoutes); 
+app.use('/api/pdf', authenticateUser, pdfRoutes);
+app.use('/api/ai', authenticateUser, aiRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/notes', authenticateUser, noteRoutes); 
 
 // Root route (optional)
 app.get('/', (req, res) => {
