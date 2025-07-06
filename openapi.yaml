@@ -1,0 +1,411 @@
+openapi: 3.0.0
+info:
+  title: PDF Helper AI API
+  version: 1.0.0
+  description: API specification for PDF Helper AI backend
+servers:
+  - url: http://localhost:3000/api
+    description: Local development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    UploadPDFResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        pdf:
+          type: object
+          properties:
+            _id:
+              type: string
+            user:
+              type: string
+            filename:
+              type: string
+            originalName:
+              type: string
+            fileSize:
+              type: number
+            fileType:
+              type: string
+            extractedText:
+              type: string
+            images:
+              type: array
+              items:
+                type: object
+            imageCount:
+              type: number
+            createdAt:
+              type: string
+              format: date-time
+    AskQuestionResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Note:
+      type: object
+      properties:
+        _id:
+          type: string
+        user:
+          type: string
+        pdf:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: PDF
+  - name: AI
+  - name: Notes
+  - name: User
+
+paths:
+  /user/register:
+    post:
+      tags: [User]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+              required:
+                - email
+      responses:
+        201:
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                  token:
+                    type: string
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        409:
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/login:
+    post:
+      tags: [User]
+      summary: Log in a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+              required:
+                - email
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  user:
+                    type: object
+                  token:
+                    type: string
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        404:
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /pdf/upload:
+    post:
+      tags: [PDF]
+      summary: Upload a PDF
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                pdf:
+                  type: string
+                  format: binary
+      responses:
+        201:
+          description: PDF uploaded and analyzed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadPDFResponse'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /pdf/getpdfs:
+    get:
+      tags: [PDF]
+      summary: Get all PDFs for authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: List of PDFs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /pdf/pdfs/{pdfId}/details:
+    get:
+      tags: [PDF]
+      summary: Get detailed PDF data
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pdfId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: PDF details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  pdf:
+                    type: object
+                  conversations:
+                    type: array
+                  notes:
+                    type: array
+
+  /pdf/pdfs/{pdfId}:
+    delete:
+      tags: [PDF]
+      summary: Delete a PDF
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pdfId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: PDF deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /ai/ask:
+    post:
+      tags: [AI]
+      summary: Ask a question to the AI about a PDF
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pdfId:
+                  type: string
+                question:
+                  type: string
+              required:
+                - pdfId
+                - question
+      responses:
+        200:
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskQuestionResponse'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        404:
+          description: PDF not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /notes/generate:
+    post:
+      tags: [Notes]
+      summary: Generate AI notes for a PDF
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pdfId:
+                  type: string
+              required:
+                - pdfId
+      responses:
+        201:
+          description: Notes generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  note:
+                    type: object
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        404:
+          description: PDF not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        500:
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /notes/download:
+    get:
+      tags: [Notes]
+      summary: Download notes as a PDF
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pdfId:
+                  type: string
+              required:
+                - pdfId
+      responses:
+        200:
+          description: Notes PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        404:
+          description: No notes found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'

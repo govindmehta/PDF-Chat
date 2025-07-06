@@ -10,6 +10,14 @@ import env from 'dotenv';
 import noteRoutes from './routes/noteRoutes.js';
 import { authenticateUser } from './middlewares/authMiddleware.js';
 
+import { swaggerSpec, swaggerUi } from './utils/swagger.js';
+
+import YAML from 'yamljs';
+
+
+const swaggerDocument = YAML.load('./openapi.yaml');
+
+
 env.config();
 
 import connectDB from './config/db.js';
@@ -34,6 +42,7 @@ app.use('/api/notes', authenticateUser, noteRoutes);
 app.get('/', (req, res) => {
   res.send('📄 PDF Helper AI Backend is Running!');
 });
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Start server
 const PORT = process.env.PORT || 3000;
